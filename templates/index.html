@@ -1,0 +1,281 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Coca-Cola Products Price Comparison</title>
+    <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        body {
+            background-color: #f8f9fa;
+            font-family: 'Arial', sans-serif;
+        }
+        .header {
+            background: linear-gradient(135deg, #E50000, #FF6B35);
+            color: white;
+            padding: 2rem 0;
+            text-align: center;
+            margin-bottom: 2rem;
+        }
+        .chart-container {
+            background: white;
+            border-radius: 10px;
+            padding: 1.5rem;
+            margin-bottom: 2rem;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+        .product-card {
+            background: white;
+            border-radius: 10px;
+            padding: 1rem;
+            margin-bottom: 1rem;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+            transition: transform 0.2s;
+        }
+        .product-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
+        }
+        .product-image {
+            width: 80px;
+            height: 80px;
+            object-fit: cover;
+            border-radius: 5px;
+        }
+        .store-badge {
+            padding: 0.25rem 0.75rem;
+            border-radius: 20px;
+            font-size: 0.8rem;
+            font-weight: bold;
+        }
+        .store-coles { background-color: #E50000; color: white; }
+        .store-iga { background-color: #00A651; color: white; }
+        .store-woolworths { background-color: #FF6B35; color: white; }
+        .price {
+            font-size: 1.2rem;
+            font-weight: bold;
+            color: #28a745;
+        }
+        .loading {
+            text-align: center;
+            padding: 2rem;
+        }
+        .filter-container {
+            background: white;
+            border-radius: 10px;
+            padding: 1.5rem;
+            margin-bottom: 2rem;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+        .no-image {
+            width: 80px;
+            height: 80px;
+            background-color: #e9ecef;
+            border-radius: 5px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #6c757d;
+            font-size: 0.8rem;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <div class="container">
+            <h1>🥤 Coca-Cola Products Price Comparison</h1>
+            <p class="lead">Compare prices across Coles, IGA, and Woolworths</p>
+        </div>
+    </div>
+
+    <div class="container">
+        <!-- Filters -->
+        <div class="filter-container">
+            <h3>Filters</h3>
+            <div class="row">
+                <div class="col-md-4">
+                    <label for="storeFilter" class="form-label">Store:</label>
+                    <select id="storeFilter" class="form-select">
+                        <option value="all">All Stores</option>
+                        <option value="Coles">Coles</option>
+                        <option value="IGA">IGA</option>
+                        <option value="Woolworths">Woolworths</option>
+                    </select>
+                </div>
+                <div class="col-md-4">
+                    <label for="priceFilter" class="form-label">Max Price:</label>
+                    <input type="range" id="priceFilter" class="form-range" min="0" max="100" value="100">
+                    <span id="priceValue">$100</span>
+                </div>
+                <div class="col-md-4">
+                    <label for="searchFilter" class="form-label">Search Products:</label>
+                    <input type="text" id="searchFilter" class="form-control" placeholder="Search by product name...">
+                </div>
+            </div>
+        </div>
+
+        <!-- Charts -->
+        <div class="row">
+            <div class="col-lg-6">
+                <div class="chart-container">
+                    <div id="priceComparisonChart" class="loading">Loading price comparison...</div>
+                </div>
+            </div>
+            <div class="col-lg-6">
+                <div class="chart-container">
+                    <div id="productCountChart" class="loading">Loading product count...</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="row">
+            <div class="col-12">
+                <div class="chart-container">
+                    <div id="priceDistributionChart" class="loading">Loading price distribution...</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Products List -->
+        <div class="chart-container">
+            <h3>Products</h3>
+            <div id="productsList" class="loading">Loading products...</div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        let allProducts = [];
+        let filteredProducts = [];
+
+        // Load data when page loads
+        document.addEventListener('DOMContentLoaded', function() {
+            loadData();
+            setupFilters();
+        });
+
+        async function loadData() {
+            try {
+                const response = await fetch('/api/data');
+                const data = await response.json();
+                
+                allProducts = data.products;
+                filteredProducts = [...allProducts];
+                
+                // Render charts
+                Plotly.newPlot('priceComparisonChart', data.price_comparison.data, data.price_comparison.layout, {responsive: true});
+                Plotly.newPlot('productCountChart', data.product_count.data, data.product_count.layout, {responsive: true});
+                Plotly.newPlot('priceDistributionChart', data.price_distribution.data, data.price_distribution.layout, {responsive: true});
+                
+                // Render products
+                renderProducts();
+                
+            } catch (error) {
+                console.error('Error loading data:', error);
+                document.getElementById('productsList').innerHTML = '<div class="alert alert-danger">Error loading data</div>';
+            }
+        }
+
+        function setupFilters() {
+            // Store filter
+            document.getElementById('storeFilter').addEventListener('change', applyFilters);
+            
+            // Price filter
+            const priceFilter = document.getElementById('priceFilter');
+            const priceValue = document.getElementById('priceValue');
+            
+            priceFilter.addEventListener('input', function() {
+                priceValue.textContent = '$' + this.value;
+                applyFilters();
+            });
+            
+            // Search filter
+            document.getElementById('searchFilter').addEventListener('input', applyFilters);
+        }
+
+        function applyFilters() {
+            const storeFilter = document.getElementById('storeFilter').value;
+            const maxPrice = parseFloat(document.getElementById('priceFilter').value);
+            const searchTerm = document.getElementById('searchFilter').value.toLowerCase();
+            
+            filteredProducts = allProducts.filter(product => {
+                // Store filter
+                if (storeFilter !== 'all' && product.store !== storeFilter) {
+                    return false;
+                }
+                
+                // Price filter
+                if (product.price_numeric > maxPrice) {
+                    return false;
+                }
+                
+                // Search filter
+                if (searchTerm && !product.product_name.toLowerCase().includes(searchTerm)) {
+                    return false;
+                }
+                
+                return true;
+            });
+            
+            renderProducts();
+        }
+
+        function renderProducts() {
+            const container = document.getElementById('productsList');
+            
+            if (filteredProducts.length === 0) {
+                container.innerHTML = '<div class="alert alert-info">No products match your filters</div>';
+                return;
+            }
+            
+            const html = filteredProducts.map(product => {
+                const storeClass = `store-${product.store.toLowerCase()}`;
+                const imageHtml = product.image_url 
+                    ? `<img src="${product.image_url}" alt="${product.product_name}" class="product-image" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex'">`
+                    : '';
+                const noImageHtml = !product.image_url 
+                    ? `<div class="no-image">No Image</div>`
+                    : `<div class="no-image" style="display:none">No Image</div>`;
+                
+                return `
+                    <div class="product-card">
+                        <div class="row align-items-center">
+                            <div class="col-auto">
+                                ${imageHtml}
+                                ${noImageHtml}
+                            </div>
+                            <div class="col">
+                                <h5 class="mb-1">${product.product_name}</h5>
+                                <p class="mb-1 text-muted">${product.brand}</p>
+                                <span class="store-badge ${storeClass}">${product.store}</span>
+                            </div>
+                            <div class="col-auto">
+                                <div class="price">${product.price}</div>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+            
+            container.innerHTML = html;
+        }
+
+        // Update price filter max value based on data
+        function updatePriceFilter() {
+            if (allProducts.length > 0) {
+                const maxPrice = Math.max(...allProducts.map(p => p.price_numeric));
+                const priceFilter = document.getElementById('priceFilter');
+                priceFilter.max = Math.ceil(maxPrice);
+                priceFilter.value = Math.ceil(maxPrice);
+                document.getElementById('priceValue').textContent = '$' + Math.ceil(maxPrice);
+            }
+        }
+
+        // Call updatePriceFilter after data loads
+        window.addEventListener('load', function() {
+            setTimeout(updatePriceFilter, 1000);
+        });
+    </script>
+</body>
+</html>

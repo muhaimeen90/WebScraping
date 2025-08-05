@@ -58,97 +58,114 @@ st.markdown("""
 def load_and_process_data():
     """Load and process all CSV files"""
     
-    # Load Coles data
-    coles_df = pd.read_csv('coles_coca_cola_products.csv')
-    coles_df['store'] = 'Coles'
-    
-    # Rename columns to match other stores and handle the new structure
-    if 'name' in coles_df.columns:
-        coles_df = coles_df.rename(columns={'name': 'product_name'})
-    if 'imageURL' in coles_df.columns:
-        coles_df = coles_df.rename(columns={'imageURL': 'image_url'})
-    
-    # Handle image URLs - replace "Image not available" with None
-    if 'image_url' in coles_df.columns:
-        coles_df['image_url'] = coles_df['image_url'].replace('Image not available', None)
-    else:
-        coles_df['image_url'] = None
-    
-    coles_df['brand'] = 'Coca-Cola'
-    
-    # Load IGA data
-    iga_df = pd.read_csv('iga_coca_cola_products.csv')
-    iga_df['store'] = 'IGA'
-    
-    # Load Woolworths data
-    woolworths_df = pd.read_csv('woolworths_coca_cola_products.csv')
-    woolworths_df['store'] = 'Woolworths'
-    
-    # Combine all dataframes
-    all_data = []
-    
-    # Process Coles data
-    for _, row in coles_df.iterrows():
-        all_data.append({
-            'product_name': row['product_name'],
-            'brand': row['brand'],
-            'price': row['price'],
-            'store': row['store'],
-            'image_url': row['image_url']
-        })
-    
-    # Process IGA data
-    for _, row in iga_df.iterrows():
-        all_data.append({
-            'product_name': row['product_name'],
-            'brand': row['brand'],
-            'price': row['price'],
-            'store': row['store'],
-            'image_url': row['image_url']
-        })
-    
-    # Process Woolworths data
-    for _, row in woolworths_df.iterrows():
-        all_data.append({
-            'product_name': row['product_name'],
-            'brand': row['brand'],
-            'price': row['price'],
-            'store': row['store'],
-            'image_url': row['image_url'] if row['image_url'] != 'Unknown' else None
-        })
-    
-    # Create combined dataframe
-    combined_df = pd.DataFrame(all_data)
-    
-    # Clean price data - remove $ and convert to float, handle non-numeric values
-    def clean_price(price_str):
-        if pd.isna(price_str) or price_str == 'Price not available' or price_str == '':
-            return None
-        try:
-            # Remove $ and commas, then convert to float
-            cleaned = str(price_str).replace('$', '').replace(',', '')
-            return float(cleaned)
-        except (ValueError, AttributeError):
-            return None
-    
-    combined_df['price_numeric'] = combined_df['price'].apply(clean_price)
-    
-    # Filter out rows with no valid price
-    combined_df = combined_df.dropna(subset=['price_numeric'])
-    
-    return combined_df
-
-def load_image_from_url(url):
-    """Load image from URL"""
     try:
-        response = requests.get(url, timeout=5)
+        # Load Coles data
+        coles_df = pd.read_csv('coles_coca_cola_products.csv')
+        coles_df['store'] = 'Coles'
+        
+        # Rename columns to match other stores and handle the new structure
+        if 'name' in coles_df.columns:
+            coles_df = coles_df.rename(columns={'name': 'product_name'})
+        if 'imageURL' in coles_df.columns:
+            coles_df = coles_df.rename(columns={'imageURL': 'image_url'})
+        
+        # Handle image URLs - replace "Image not available" with None
+        if 'image_url' in coles_df.columns:
+            coles_df['image_url'] = coles_df['image_url'].replace('Image not available', None)
+        else:
+            coles_df['image_url'] = None
+        
+        coles_df['brand'] = 'Coca-Cola'
+        
+        # Load IGA data
+        iga_df = pd.read_csv('iga_coca_cola_products.csv')
+        iga_df['store'] = 'IGA'
+        
+        # Load Woolworths data
+        woolworths_df = pd.read_csv('woolworths_coca_cola_products.csv')
+        woolworths_df['store'] = 'Woolworths'
+        
+        # Combine all dataframes
+        all_data = []
+        
+        # Process Coles data
+        for _, row in coles_df.iterrows():
+            all_data.append({
+                'product_name': row['product_name'],
+                'brand': row['brand'],
+                'price': row['price'],
+                'store': row['store'],
+                'image_url': row['image_url']
+            })
+        
+        # Process IGA data
+        for _, row in iga_df.iterrows():
+            all_data.append({
+                'product_name': row['product_name'],
+                'brand': row['brand'],
+                'price': row['price'],
+                'store': row['store'],
+                'image_url': row['image_url']
+            })
+        
+        # Process Woolworths data
+        for _, row in woolworths_df.iterrows():
+            all_data.append({
+                'product_name': row['product_name'],
+                'brand': row['brand'],
+                'price': row['price'],
+                'store': row['store'],
+                'image_url': row['image_url'] if row['image_url'] != 'Unknown' else None
+            })
+        
+        # Create combined dataframe
+        combined_df = pd.DataFrame(all_data)
+        
+        # Clean price data - remove $ and convert to float, handle non-numeric values
+        def clean_price(price_str):
+            if pd.isna(price_str) or price_str == 'Price not available' or price_str == '':
+                return None
+            try:
+                # Remove $ and commas, then convert to float
+                cleaned = str(price_str).replace('$', '').replace(',', '')
+                return float(cleaned)
+            except (ValueError, AttributeError):
+                return None
+        
+        combined_df['price_numeric'] = combined_df['price'].apply(clean_price)
+        
+        # Filter out rows with no valid price
+        combined_df = combined_df.dropna(subset=['price_numeric'])
+        
+        return combined_df
+        
+    except Exception as e:
+        st.error(f"Error loading data: {str(e)}")
+        return pd.DataFrame()
+
+@st.cache_data
+def load_image_from_url(url):
+    """Load image from URL with error handling"""
+    if not url or pd.isna(url):
+        return None
+    
+    try:
+        headers = {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+        }
+        response = requests.get(url, timeout=10, headers=headers)
+        response.raise_for_status()
         img = Image.open(BytesIO(response.content))
         return img
-    except:
+    except Exception as e:
+        # st.warning(f"Could not load image: {str(e)}")
         return None
 
 def create_price_comparison_chart(df):
     """Create price comparison chart"""
+    if df.empty:
+        return None
+        
     avg_prices = df.groupby('store')['price_numeric'].mean().reset_index()
     
     fig = px.bar(avg_prices, x='store', y='price_numeric', 
@@ -173,6 +190,9 @@ def create_price_comparison_chart(df):
 
 def create_product_count_chart(df):
     """Create product count chart"""
+    if df.empty:
+        return None
+        
     product_counts = df['store'].value_counts().reset_index()
     product_counts.columns = ['store', 'count']
     
@@ -194,6 +214,9 @@ def create_product_count_chart(df):
 
 def create_price_distribution_chart(df):
     """Create price distribution chart"""
+    if df.empty:
+        return None
+        
     fig = px.box(df, x='store', y='price_numeric',
                  title='Price Distribution by Store',
                  labels={'price_numeric': 'Price ($)', 'store': 'Store'},
@@ -226,6 +249,10 @@ def main():
     # Load data
     with st.spinner('Loading data...'):
         df = load_and_process_data()
+    
+    if df.empty:
+        st.error("No data could be loaded. Please check your CSV files.")
+        st.stop()
     
     # Sidebar filters
     st.sidebar.header("🔍 Filters")
@@ -277,31 +304,38 @@ def main():
         )
     
     with col2:
-        avg_price = filtered_df['price_numeric'].mean()
-        total_avg = df['price_numeric'].mean()
-        st.metric(
-            label="Average Price",
-            value=f"${avg_price:.2f}",
-            delta=f"${avg_price - total_avg:.2f} vs total avg"
-        )
+        if not filtered_df.empty:
+            avg_price = filtered_df['price_numeric'].mean()
+            total_avg = df['price_numeric'].mean()
+            st.metric(
+                label="Average Price",
+                value=f"${avg_price:.2f}",
+                delta=f"${avg_price - total_avg:.2f} vs total avg"
+            )
+        else:
+            st.metric(label="Average Price", value="N/A")
     
     with col3:
-        min_price_product = filtered_df.loc[filtered_df['price_numeric'].idxmin()] if not filtered_df.empty else None
-        if min_price_product is not None:
+        if not filtered_df.empty:
+            min_price_product = filtered_df.loc[filtered_df['price_numeric'].idxmin()]
             st.metric(
                 label="Lowest Price",
                 value=min_price_product['price'],
                 delta=f"{min_price_product['store']}"
             )
+        else:
+            st.metric(label="Lowest Price", value="N/A")
     
     with col4:
-        max_price_product = filtered_df.loc[filtered_df['price_numeric'].idxmax()] if not filtered_df.empty else None
-        if max_price_product is not None:
+        if not filtered_df.empty:
+            max_price_product = filtered_df.loc[filtered_df['price_numeric'].idxmax()]
             st.metric(
                 label="Highest Price",
                 value=max_price_product['price'],
                 delta=f"{max_price_product['store']}"
             )
+        else:
+            st.metric(label="Highest Price", value="N/A")
     
     # Charts
     st.header("📈 Price Analysis")
@@ -312,15 +346,18 @@ def main():
         
         with col1:
             fig1 = create_price_comparison_chart(filtered_df)
-            st.plotly_chart(fig1, use_container_width=True)
+            if fig1:
+                st.plotly_chart(fig1, use_container_width=True)
         
         with col2:
             fig2 = create_product_count_chart(filtered_df)
-            st.plotly_chart(fig2, use_container_width=True)
+            if fig2:
+                st.plotly_chart(fig2, use_container_width=True)
         
         # Price distribution chart (full width)
         fig3 = create_price_distribution_chart(filtered_df)
-        st.plotly_chart(fig3, use_container_width=True)
+        if fig3:
+            st.plotly_chart(fig3, use_container_width=True)
         
         # Products section
         st.header("🛍️ Products")

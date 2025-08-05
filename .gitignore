@@ -53,7 +53,8 @@ instance/
 .webassets-cache
 
 # Streamlit
-.streamlit/
+.streamlit/secrets.toml
+.streamlit/credentials.toml
 
 # Environment variables
 .env

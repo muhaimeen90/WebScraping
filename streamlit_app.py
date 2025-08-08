@@ -68,6 +68,9 @@ def load_and_process_data():
             coles_df = coles_df.rename(columns={'name': 'product_name'})
         if 'imageURL' in coles_df.columns:
             coles_df = coles_df.rename(columns={'imageURL': 'image_url'})
+        # NEW: rename productURL -> product_url when present
+        if 'productURL' in coles_df.columns:
+            coles_df = coles_df.rename(columns={'productURL': 'product_url'})
         
         # Handle image URLs - replace "Image not available" with None
         if 'image_url' in coles_df.columns:
@@ -95,7 +98,8 @@ def load_and_process_data():
                 'brand': row['brand'],
                 'price': row['price'],
                 'store': row['store'],
-                'image_url': row['image_url']
+                'image_url': row['image_url'],
+                'product_url': row.get('product_url') if pd.notna(row.get('product_url')) else None
             })
         
         # Process IGA data
@@ -105,7 +109,8 @@ def load_and_process_data():
                 'brand': row['brand'],
                 'price': row['price'],
                 'store': row['store'],
-                'image_url': row['image_url']
+                'image_url': row['image_url'],
+                'product_url': row.get('product_url') if pd.notna(row.get('product_url')) else None
             })
         
         # Process Woolworths data
@@ -115,7 +120,8 @@ def load_and_process_data():
                 'brand': row['brand'],
                 'price': row['price'],
                 'store': row['store'],
-                'image_url': row['image_url'] if row['image_url'] != 'Unknown' else None
+                'image_url': row['image_url'] if row['image_url'] != 'Unknown' else None,
+                'product_url': row.get('product_url') if pd.notna(row.get('product_url')) else None
             })
         
         # Create combined dataframe
@@ -381,18 +387,27 @@ def main():
                 col1, col2, col3 = st.columns([1, 4, 1])
                 
                 with col1:
-                    # Display image
-                    if product['image_url']:
-                        img = load_image_from_url(product['image_url'])
-                        if img:
-                            st.image(img, width=100)
+                    # Display image (clickable if URL is present)
+                    if pd.notna(product.get('image_url')) and product.get('image_url'):
+                        if product.get('product_url'):
+                            st.markdown(
+                                f"<a href='{product['product_url']}' target='_blank'><img src='{product['image_url']}' width='100' style='border-radius:8px' /></a>",
+                                unsafe_allow_html=True
+                            )
                         else:
-                            st.write("🖼️ No Image")
+                            st.image(product['image_url'], width=100)
                     else:
                         st.write("🖼️ No Image")
                 
                 with col2:
-                    st.subheader(product['product_name'])
+                    # Clickable product name
+                    if product.get('product_url'):
+                        st.markdown(
+                            f"<a href='{product['product_url']}' target='_blank' style='text-decoration:none; color:inherit;'><h4 style='margin:0'>{product['product_name']}</h4></a>",
+                            unsafe_allow_html=True
+                        )
+                    else:
+                        st.subheader(product['product_name'])
                     st.write(f"**Brand:** {product['brand']}")
                     
                     # Store badge

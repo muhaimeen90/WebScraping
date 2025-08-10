@@ -1,127 +1,59 @@
-# 🥤 Coca-Cola Products Price Comparison
+# Coca-Cola Price Comparison Tool
 
-A comprehensive web application for comparing Coca-Cola product prices across Australian supermarket chains (Coles, IGA, and Woolworths).
+A live price scraping application that compares Coca-Cola product prices across three major Australian supermarket chains: IGA, Coles, and Woolworths.
 
 ## Features
 
-### 📊 Interactive Data Visualization
-- Price comparison charts across stores
-- Product count distribution
-- Price range analysis with box plots
-- Real-time filtering and search
+- **Live Price Scraping**: Real-time price updates using Playwright browser automation
+- **Multi-Store Support**: IGA, Coles, and Woolworths integration
+- **Interactive Dashboard**: Streamlit-based web interface
+- **Individual & Bulk Updates**: Update prices for single products or entire store catalogs
+- **Visual Product Display**: Product images and detailed information
+- **Price Comparison**: Compare CSV prices with live scraped prices
 
-### 🖼️ Product Gallery
-- Product images and details
-- Store-specific color coding
-- Price comparison views
-- Responsive design
+## Quick Start
 
-### 🔍 Advanced Filtering
-- Filter by store
-- Price range slider
-- Product name search
-- Real-time updates
+1. **Install Dependencies**:
+   ```bash
+   pip install -r requirements.txt
+   playwright install
+   ```
 
-## Technologies Used
+2. **Run the Application**:
+   ```bash
+   streamlit run streamlit_app.py
+   ```
 
-- **Backend**: Python, Flask, Pandas
-- **Data Visualization**: Plotly
-- **Frontend**: HTML, Bootstrap, JavaScript
-- **Alternative UI**: Streamlit
-- **Data Processing**: CSV files with product information
+3. **Use the Interface**:
+   - Click individual "🔄 Update" buttons to get live prices
+   - Use sidebar bulk update buttons for entire store catalogs
+   - Switch between store tabs to view different retailer data
 
-## Project Structure
+## File Structure
 
 ```
-├── main.py                           # Flask web application
-├── streamlit_app.py                 # Streamlit alternative interface
-├── templates/
-│   └── index.html                   # Flask HTML template
+├── streamlit_app.py          # Main Streamlit application
+├── price_scrapers.py         # Live price scraping logic
+├── requirements.txt          # Python dependencies
 ├── coles_coca_cola_products.csv     # Coles product data
 ├── iga_coca_cola_products.csv       # IGA product data
 ├── woolworths_coca_cola_products.csv # Woolworths product data
-└── requirements.txt                 # Python dependencies
+└── README.md                 # This file
 ```
 
-## Installation & Setup
+## Technical Details
 
-1. **Clone the repository**
-   ```bash
-   git clone <repository-url>
-   cd "week 2"
-   ```
+- **Frontend**: Streamlit with custom CSS styling
+- **Backend**: Playwright for browser automation
+- **Browsers**: Firefox (IGA, Woolworths), Chromium (Coles)
+- **Data**: CSV files containing product information and URLs
 
-2. **Create virtual environment**
-   ```bash
-   python -m venv venv
-   source venv/bin/activate  # On Windows: venv\Scripts\activate
-   ```
+## Dependencies
 
-3. **Install dependencies**
-   ```bash
-   pip install -r requirements.txt
-   ```
-
-## Running the Applications
-
-### Flask Application
-```bash
-python main.py
-```
-Visit: `http://localhost:5000`
-
-### Streamlit Application
-```bash
-streamlit run streamlit_app.py
-```
-Visit: `http://localhost:8501`
-
-## Data Sources
-
-The application uses CSV files containing product data from:
-- **Coles**: Product names, prices, URLs, and images
-- **IGA**: Product names, brands, prices, URLs, and images  
-- **Woolworths**: Product names, brands, prices, URLs, and images
-
-## Features Overview
-
-### Flask Version
-- Professional web interface with Bootstrap styling
-- Interactive Plotly charts
-- Real-time filtering without page refresh
-- Product cards with images
-- Store-specific color themes
-
-### Streamlit Version
-- Rapid prototyping interface
-- Built-in widgets and components
-- Automatic reactivity
-- Summary metrics and insights
-- Advanced data tables
-
-## Data Processing
-
-The application handles:
-- Price normalization (removes '$', handles "Price not available")
-- Image URL validation (handles "Image not available")
-- Missing data gracefully
-- Different CSV column structures
-
-## Future Enhancements
-
-- Real-time web scraping functionality
-- Dynamic product search queries
-- Price history tracking
-- More detailed product comparisons
-- Additional store integrations
-
-## Contributing
-
-1. Fork the repository
-2. Create a feature branch
-3. Make your changes
-4. Submit a pull request
-
-## License
-
-This project is for educational and demonstration purposes.
+- streamlit>=1.32.0
+- pandas>=2.2.0
+- plotly>=5.17.0
+- Pillow>=10.2.0
+- requests>=2.31.0
+- playwright>=1.40.0
+- beautifulsoup4>=4.12.0

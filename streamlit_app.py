@@ -6,6 +6,10 @@ from PIL import Image
 import requests
 from io import BytesIO
 import re
+import asyncio
+import threading
+import time
+from price_scrapers import get_live_price_sync
 
 # Page configuration
 st.set_page_config(
@@ -167,6 +171,23 @@ def load_image_from_url(url):
         # st.warning(f"Could not load image: {str(e)}")
         return None
 
+def update_live_price(product_url, store, product_name):
+    """Update live price for a specific product"""
+    if not product_url or pd.isna(product_url):
+        return None, "No product URL available"
+    
+    try:
+        with st.spinner(f'Fetching live price for {product_name}...'):
+            result = get_live_price_sync(product_url, store)
+            
+            if result['status'] == 'success':
+                return result['price'], f"✅ Live price updated successfully"
+            else:
+                return None, f"❌ {result['message']}"
+                
+    except Exception as e:
+        return None, f"❌ Error: {str(e)}"
+
 def create_price_comparison_chart(df):
     """Create price comparison chart"""
     if df.empty:
@@ -281,6 +302,41 @@ def main():
     # Search filter
     search_term = st.sidebar.text_input('Search Products:', placeholder='Enter product name...')
     
+    # Live price update section
+    st.sidebar.header("🔄 Live Price Updates")
+    
+    if st.sidebar.button("🔄 Update All Prices", help="Update live prices for all filtered products"):
+        if not filtered_df.empty:
+            progress_bar = st.sidebar.progress(0)
+            status_text = st.sidebar.empty()
+            
+            total_products = len(filtered_df)
+            updated_count = 0
+            
+            for i, (idx, product) in enumerate(filtered_df.iterrows()):
+                if product.get('product_url') and not pd.isna(product.get('product_url')):
+                    status_text.text(f"Updating {product['product_name'][:30]}...")
+                    
+                    live_price, status_message = update_live_price(
+                        product['product_url'], 
+                        product['store'], 
+                        product['product_name']
+                    )
+                    
+                    if live_price is not None:
+                        price_key = f"price_{idx}"
+                        st.session_state[price_key] = f"${live_price:.2f}"
+                        updated_count += 1
+                
+                progress_bar.progress((i + 1) / total_products)
+            
+            status_text.text(f"✅ Updated {updated_count}/{total_products} products")
+            st.sidebar.success(f"Bulk update completed! {updated_count} prices updated.")
+            time.sleep(2)
+            st.rerun()
+    
+    st.sidebar.markdown("---")
+    
     # Apply filters
     filtered_df = df.copy()
     
@@ -384,7 +440,7 @@ def main():
         # Display products with images
         for idx, product in filtered_df.iterrows():
             with st.container():
-                col1, col2, col3 = st.columns([1, 4, 1])
+                col1, col2, col3, col4 = st.columns([1, 4, 1, 1])
                 
                 with col1:
                     # Display image (clickable if URL is present)
@@ -424,7 +480,42 @@ def main():
                     )
                 
                 with col3:
-                    st.metric("Price", product['price'])
+                    # Current price with live update status
+                    price_key = f"price_{idx}"
+                    status_key = f"status_{idx}"
+                    
+                    if price_key not in st.session_state:
+                        st.session_state[price_key] = product['price']
+                        st.session_state[status_key] = ""
+                    
+                    st.metric("Price", st.session_state[price_key])
+                    
+                    # Show update status if available
+                    if st.session_state[status_key]:
+                        st.caption(st.session_state[status_key])
+                
+                with col4:
+                    # Live price update button
+                    if product.get('product_url') and not pd.isna(product.get('product_url')):
+                        button_key = f"update_{idx}"
+                        if st.button("🔄 Update Price", key=button_key, help=f"Get live price for {product['product_name']}"):
+                            # Update live price
+                            live_price, status_message = update_live_price(
+                                product['product_url'], 
+                                product['store'], 
+                                product['product_name']
+                            )
+                            
+                            if live_price is not None:
+                                st.session_state[price_key] = f"${live_price:.2f}"
+                                # Update the dataframe for charts
+                                filtered_df.loc[idx, 'price'] = f"${live_price:.2f}"
+                                filtered_df.loc[idx, 'price_numeric'] = live_price
+                            
+                            st.session_state[status_key] = status_message
+                            st.rerun()
+                    else:
+                        st.caption("No URL available")
                 
                 st.divider()
     

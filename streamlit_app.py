@@ -1,3 +1,5 @@
+import os
+import subprocess
 import streamlit as st
 import pandas as pd
 import plotly.express as px
@@ -264,7 +266,17 @@ def create_price_distribution_chart(df):
     
     return fig
 
+def setup_playwright():
+    """Install Playwright browsers if not available"""
+    try:
+        if not os.path.exists("/home/appuser/.cache/ms-playwright"):
+            subprocess.run(["playwright", "install", "firefox"], check=False)
+            subprocess.run(["playwright", "install", "chromium"], check=False)
+    except Exception as e:
+        st.warning(f"Could not install browsers: {e}")
+
 def main():
+    setup_playwright()
     # Header
     st.markdown("""
     <div class="main-header">

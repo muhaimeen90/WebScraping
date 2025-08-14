@@ -70,58 +70,31 @@ async def scrape_iga_product_price(product_url: str) -> Dict[str, Any]:
             
             page = await context.new_page()
             
-            # Set longer timeout and try different load strategies
-            logger.info("📱 Navigating to IGA product page...")
-            
-            # Try multiple navigation strategies
-            navigation_success = False
-            
-            # Strategy 1: Standard navigation with shorter timeout
+            # Simplified navigation - just try to load the page
             try:
-                await page.goto(product_url, wait_until='domcontentloaded', timeout=15000)
-                navigation_success = True
-                logger.info("✅ Navigation successful with domcontentloaded")
+                await page.goto(product_url, wait_until='domcontentloaded', timeout=30000)
+                logger.info("✅ Navigation successful")
             except Exception as e:
-                logger.info(f"Standard navigation failed: {e}")
-            
-            # Strategy 2: If standard fails, try with load event
-            if not navigation_success:
-                try:
-                    await page.goto(product_url, wait_until='load', timeout=20000)
-                    navigation_success = True
-                    logger.info("✅ Navigation successful with load")
-                except Exception as e:
-                    logger.info(f"Load navigation failed: {e}")
-            
-            # Strategy 3: If both fail, try basic navigation
-            if not navigation_success:
-                try:
-                    await page.goto(product_url, timeout=25000)
-                    navigation_success = True
-                    logger.info("✅ Navigation successful with basic timeout")
-                except Exception as e:
-                    raise Exception(f"All navigation strategies failed: {e}")
-            
-            # Handle welcome modal/popup
-            await handle_iga_modal(page)
+                raise Exception(f"Navigation failed: {e}")
             
             # Wait for page to stabilize
-            await page.wait_for_timeout(5000)
+            await asyncio.sleep(3)
             
-            # Try to find price using multiple strategies
+            # Try to find price using simplified strategy
             price_text = None
             
-            # Strategy 1: Try all CSS selectors
+            # Updated price selectors based on current IGA website structure
             price_selectors = [
-                '#product-details span[class*="price"]',
+                'span.font-bold.leading-none',  # Current working selector
+                'span.font-bold',
+                'span[class*="font-bold"]',
                 '#product-details span',
                 '.price',
                 '[data-testid*="price"]',
                 'span[class*="price"]',
                 'div[class*="price"]',
                 'span:has-text("$")',
-                '.product-price',
-                '#product-details > div > div > div > div.lg\\:pt-8 > div > div.flex.items-center.gap-3 > div > span'
+                '.product-price'
             ]
             
             for selector in price_selectors:
@@ -130,7 +103,7 @@ async def scrape_iga_product_price(product_url: str) -> Dict[str, Any]:
                     for element in elements:
                         text = await element.text_content()
                         if text and '$' in text and len(text.strip()) < 20:  # Price shouldn't be too long
-                            price_text = text
+                            price_text = text.strip()
                             logger.info(f"✅ Found price with selector: {selector}")
                             break
                     if price_text:
@@ -139,62 +112,18 @@ async def scrape_iga_product_price(product_url: str) -> Dict[str, Any]:
                     logger.debug(f"Selector {selector} failed: {e}")
                     continue
             
-            # Strategy 2: Try XPath if CSS fails
-            if not price_text:
-                xpath_selectors = [
-                    '//*[@id="product-details"]/div/div/div/div[2]/div/div[1]/div/span',
-                    '//span[contains(text(), "$")]',
-                    '//*[contains(@class, "price")]//span',
-                    '//div[@id="product-details"]//span[contains(text(), "$")]'
-                ]
-                
-                for xpath in xpath_selectors:
-                    try:
-                        elements = await page.query_selector_all(f'xpath={xpath}')
-                        for element in elements:
-                            text = await element.text_content()
-                            if text and '$' in text and len(text.strip()) < 20:
-                                price_text = text
-                                logger.info(f"✅ Found price with XPath: {xpath}")
-                                break
-                        if price_text:
-                            break
-                    except Exception as e:
-                        logger.debug(f"XPath {xpath} failed: {e}")
-            
-            # Strategy 3: Search all text content for price patterns
-            if not price_text:
-                try:
-                    page_content = await page.content()
-                    import re
-                    price_patterns = [
-                        r'\$\d+\.\d{2}',
-                        r'\$\d+',
-                        r'AUD\s*\d+\.\d{2}',
-                        r'Price:\s*\$\d+\.\d{2}'
-                    ]
-                    
-                    for pattern in price_patterns:
-                        matches = re.findall(pattern, page_content)
-                        if matches:
-                            price_text = matches[0]
-                            logger.info(f"✅ Found price with regex: {pattern}")
-                            break
-                except Exception as e:
-                    logger.debug(f"Regex search failed: {e}")
-            
             if price_text:
-                # Clean and extract price
-                cleaned_price = clean_price_text(price_text)
-                if cleaned_price:
-                    result['price'] = cleaned_price
+                # Extract price using regex
+                price_match = re.search(r'\$(\d+\.?\d*)', price_text)
+                if price_match:
+                    result['price'] = float(price_match.group(1))
                     result['status'] = 'success'
                     result['message'] = 'Price successfully scraped'
-                    logger.info(f"✅ IGA price found: ${cleaned_price}")
+                    logger.info(f"✅ IGA price found: ${result['price']}")
                 else:
                     result['message'] = f'Could not parse price from text: {price_text}'
             else:
-                result['message'] = 'Price element not found on page after trying all strategies'
+                result['message'] = 'Price element not found on page'
                 
         except Exception as e:
             logger.error(f"❌ Error scraping IGA price: {str(e)}")

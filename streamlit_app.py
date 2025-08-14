@@ -364,78 +364,11 @@ def main():
         filtered_df = filtered_df[
             filtered_df['product_name'].str.contains(search_term, case=False, na=False)
         ]
-    
-    # Summary metrics
-    st.header("📊 Summary Metrics")
-    
-    col1, col2, col3, col4 = st.columns(4)
-    
-    with col1:
-        st.metric(
-            label="Total Products",
-            value=len(filtered_df),
-            delta=f"{len(filtered_df) - len(df)} from total"
-        )
-    
-    with col2:
-        if not filtered_df.empty:
-            avg_price = filtered_df['price_numeric'].mean()
-            total_avg = df['price_numeric'].mean()
-            st.metric(
-                label="Average Price",
-                value=f"${avg_price:.2f}",
-                delta=f"${avg_price - total_avg:.2f} vs total avg"
-            )
-        else:
-            st.metric(label="Average Price", value="N/A")
-    
-    with col3:
-        if not filtered_df.empty:
-            min_price_product = filtered_df.loc[filtered_df['price_numeric'].idxmin()]
-            st.metric(
-                label="Lowest Price",
-                value=min_price_product['price'],
-                delta=f"{min_price_product['store']}"
-            )
-        else:
-            st.metric(label="Lowest Price", value="N/A")
-    
-    with col4:
-        if not filtered_df.empty:
-            max_price_product = filtered_df.loc[filtered_df['price_numeric'].idxmax()]
-            st.metric(
-                label="Highest Price",
-                value=max_price_product['price'],
-                delta=f"{max_price_product['store']}"
-            )
-        else:
-            st.metric(label="Highest Price", value="N/A")
-    
-    # Charts
-    st.header("📈 Price Analysis")
+
+    # Products section
+    st.header("🛍️ Products")
     
     if not filtered_df.empty:
-        # Charts in columns
-        col1, col2 = st.columns(2)
-        
-        with col1:
-            fig1 = create_price_comparison_chart(filtered_df)
-            if fig1:
-                st.plotly_chart(fig1, use_container_width=True)
-        
-        with col2:
-            fig2 = create_product_count_chart(filtered_df)
-            if fig2:
-                st.plotly_chart(fig2, use_container_width=True)
-        
-        # Price distribution chart (full width)
-        fig3 = create_price_distribution_chart(filtered_df)
-        if fig3:
-            st.plotly_chart(fig3, use_container_width=True)
-        
-        # Products section
-        st.header("🛍️ Products")
-        
         # Sort options
         sort_options = ['Price (Low to High)', 'Price (High to Low)', 'Product Name', 'Store']
         sort_by = st.selectbox('Sort by:', sort_options)
@@ -533,23 +466,6 @@ def main():
     
     else:
         st.warning("No products match your current filters. Please adjust your search criteria.")
-    
-    # Additional insights
-    st.header("💡 Insights")
-    
-    if not df.empty:
-        insights_col1, insights_col2 = st.columns(2)
-        
-        with insights_col1:
-            st.subheader("Price Comparison by Store")
-            store_stats = df.groupby('store')['price_numeric'].agg(['mean', 'min', 'max', 'count']).round(2)
-            store_stats.columns = ['Average Price', 'Min Price', 'Max Price', 'Product Count']
-            st.dataframe(store_stats, use_container_width=True)
-        
-        with insights_col2:
-            st.subheader("Most Expensive Products")
-            top_expensive = df.nlargest(5, 'price_numeric')[['product_name', 'store', 'price']]
-            st.dataframe(top_expensive, use_container_width=True, hide_index=True)
 
 if __name__ == "__main__":
     main()

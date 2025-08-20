@@ -314,41 +314,6 @@ def main():
     # Search filter
     search_term = st.sidebar.text_input('Search Products:', placeholder='Enter product name...')
     
-    # Live price update section
-    st.sidebar.header("🔄 Live Price Updates")
-    
-    if st.sidebar.button("🔄 Update All Prices", help="Update live prices for all filtered products"):
-        if not filtered_df.empty:
-            progress_bar = st.sidebar.progress(0)
-            status_text = st.sidebar.empty()
-            
-            total_products = len(filtered_df)
-            updated_count = 0
-            
-            for i, (idx, product) in enumerate(filtered_df.iterrows()):
-                if product.get('product_url') and not pd.isna(product.get('product_url')):
-                    status_text.text(f"Updating {product['product_name'][:30]}...")
-                    
-                    live_price, status_message = update_live_price(
-                        product['product_url'], 
-                        product['store'], 
-                        product['product_name']
-                    )
-                    
-                    if live_price is not None:
-                        price_key = f"price_{idx}"
-                        st.session_state[price_key] = f"${live_price:.2f}"
-                        updated_count += 1
-                
-                progress_bar.progress((i + 1) / total_products)
-            
-            status_text.text(f"✅ Updated {updated_count}/{total_products} products")
-            st.sidebar.success(f"Bulk update completed! {updated_count} prices updated.")
-            time.sleep(2)
-            st.rerun()
-    
-    st.sidebar.markdown("---")
-    
     # Apply filters
     filtered_df = df.copy()
     

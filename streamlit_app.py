@@ -90,9 +90,25 @@ def load_and_process_data():
         iga_df = pd.read_csv('iga_coca_cola_products.csv')
         iga_df['store'] = 'IGA'
         
+        # Rename IGA columns to standardized names
+        if 'title' in iga_df.columns:
+            iga_df = iga_df.rename(columns={'title': 'product_name'})
+        if 'productUrl' in iga_df.columns:
+            iga_df = iga_df.rename(columns={'productUrl': 'product_url'})
+        if 'imageUrl' in iga_df.columns:
+            iga_df = iga_df.rename(columns={'imageUrl': 'image_url'})
+        
         # Load Woolworths data
         woolworths_df = pd.read_csv('woolworths_coca_cola_products.csv')
         woolworths_df['store'] = 'Woolworths'
+        
+        # Rename Woolworths columns to standardized names
+        if 'title' in woolworths_df.columns:
+            woolworths_df = woolworths_df.rename(columns={'title': 'product_name'})
+        if 'producturl' in woolworths_df.columns:
+            woolworths_df = woolworths_df.rename(columns={'producturl': 'product_url'})
+        if 'imageurl' in woolworths_df.columns:
+            woolworths_df = woolworths_df.rename(columns={'imageurl': 'image_url'})
         
         # Combine all dataframes
         all_data = []

@@ -102,34 +102,11 @@ async def scrape_iga_product_price(browser: Browser, product_url: str) -> Dict[s
                 continue
         
         if price_text:
-            # Extract price using improved regex that handles commas and high prices
-            # Updated regex to handle commas and various price formats
-            price_patterns = [
-                r'\$(\d{1,3}(?:,\d{3})*\.?\d*)',  # $1,234.56 or $1,234 or $12,345.00
-                r'\$(\d+\.?\d*)',                 # $12.34 or $12
-                r'(\d{1,3}(?:,\d{3})*\.?\d*)\s*\$', # 1,234.56 $ or 1,234 $
-                r'(\d+\.?\d*)\s*\$'               # 12.34 $ or 12 $
-            ]
-            
-            price_value = None
-            for pattern in price_patterns:
-                price_match = re.search(pattern, price_text)
-                if price_match:
-                    try:
-                        # Remove commas and convert to float
-                        price_str = price_match.group(1).replace(',', '')
-                        price_value = float(price_str)
-                        break
-                    except ValueError:
-                        continue
-            
-            if price_value is not None:
-                result['price'] = price_value
-                result['status'] = 'success'
-                result['message'] = 'Price successfully scraped'
-                logger.info(f"✅ IGA price found: ${result['price']}")
-            else:
-                result['message'] = f'Could not parse price from text: {price_text}'
+            # Return raw price text without any parsing or validation
+            result['price'] = price_text.strip()
+            result['status'] = 'success'
+            result['message'] = 'Price successfully scraped'
+            logger.info(f"✅ IGA price found: {price_text.strip()}")
         else:
             result['message'] = 'Price element not found on page'
             
@@ -787,13 +764,10 @@ async def scrape_woolworths_product_price(browser: Browser, product_url: str) ->
                             price_match = re.search(pattern, text)
                             if price_match:
                                 try:
-                                    price_str = price_match.group(1).replace(',', '')
-                                    price_value = float(price_str)
-                                    # Expanded price range for high-value items
-                                    if 2.00 <= price_value <= 99999.99:
-                                        price_text = text.strip()
-                                        logger.info(f"✅ Found fallback price: {price_text}")
-                                        break
+                                    # Just check if we can extract the price text
+                                    price_text = text.strip()
+                                    logger.info(f"✅ Found fallback price: {price_text}")
+                                    break
                                 except ValueError:
                                     continue
                         if price_text:  # Break outer loop if price found
@@ -803,14 +777,11 @@ async def scrape_woolworths_product_price(browser: Browser, product_url: str) ->
         
         # Parse result
         if price_text:
-            cleaned_price = clean_price_text(price_text)
-            if cleaned_price:
-                result['price'] = cleaned_price
-                result['status'] = 'success'
-                result['message'] = 'Price successfully scraped'
-                logger.info(f"✅ Woolworths price found: ${cleaned_price}")
-            else:
-                result['message'] = f'Could not parse price from text: {price_text}'
+            # Return raw price text without any parsing or validation
+            result['price'] = price_text.strip()
+            result['status'] = 'success'
+            result['message'] = 'Price successfully scraped'
+            logger.info(f"✅ Woolworths price found: {price_text.strip()}")
         else:
             result['message'] = 'Price element not found'
             

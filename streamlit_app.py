@@ -162,9 +162,27 @@ def load_csv_data(file_path: str, store_name: str):
         if 'category' not in df.columns:
             df['category'] = 'General'
         
-        # Keep raw price data without any parsing or validation
-        # Just create a copy of the price column for compatibility
-        df['price_numeric'] = df['price']
+        # Keep raw price data for display
+        # Create numeric price column for sorting only
+        def extract_numeric_price(price_str):
+            if pd.isna(price_str) or price_str == 'Price not available' or price_str == '':
+                return 0.0  # Default for sorting
+            try:
+                # Extract numeric value from price string for sorting
+                import re
+                # Remove currency symbols and commas, extract numbers
+                cleaned = str(price_str).replace('$', '').replace(',', '').strip()
+                numeric_match = re.search(r'(\d+\.?\d*)', cleaned)
+                if numeric_match:
+                    return float(numeric_match.group(1))
+                return 0.0
+            except (ValueError, AttributeError):
+                return 0.0
+        
+        # Keep original price for display
+        df['price_display'] = df['price']
+        # Create numeric version for sorting only
+        df['price_numeric'] = df['price'].apply(extract_numeric_price)
         
         # Don't filter out any rows - show all data as-is
         
@@ -335,12 +353,6 @@ def main():
     # Display current selection info
     st.info(f"📋 Showing **{len(df)}** products from **{selected_store} - {selected_category}**")
     
-    # Sidebar filters
-    st.sidebar.header("🔍 Filters")
-    
-    # Price filter disabled for raw price data
-    st.sidebar.info("Price filtering disabled - showing raw CSV prices")
-    price_range = None  # No price filtering with raw data
     
     # Search filter
     search_term = st.sidebar.text_input('Search Products:', placeholder='Enter product name...')
@@ -462,7 +474,6 @@ def main():
                 with col3:
                     # Always show raw CSV price - no session state caching
                     st.metric("Price", product['price'])
-                    st.caption("Raw CSV Price")
                 
                 with col4:
                     # Live price update button - shows result temporarily
@@ -477,7 +488,7 @@ def main():
                             )
                             
                             if live_price is not None:
-                                st.success(f"Live Price: ${live_price:.2f}")
+                                st.success(f"Live Price: {live_price}")
                             else:
                                 st.error(status_message)
                     else:

@@ -11,12 +11,15 @@ import re
 import asyncio
 import threading
 import time
+import glob
+from pathlib import Path
+import math
 from price_scrapers import get_live_price_sync
 
 # Page configuration
 st.set_page_config(
-    page_title="Coca-Cola Products Price Comparison",
-    page_icon="🥤",
+    page_title="Grocery Price Comparison",
+    page_icon="🛒",
     layout="wide",
     initial_sidebar_state="expanded"
 )
@@ -61,115 +64,122 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 @st.cache_data
-def load_and_process_data():
-    """Load and process all CSV files"""
+def discover_csv_files():
+    """Discover all CSV files in store folders"""
+    csv_files = {}
     
+    # Check IGA folder
+    iga_files = {}
+    iga_path = Path("IGA")
+    if iga_path.exists():
+        # Get files in root IGA folder
+        for csv_file in iga_path.glob("*.csv"):
+            category = csv_file.stem.replace("iga_", "").replace("_", " ").title()
+            iga_files[category] = str(csv_file)
+        
+        # Get files in IGA subfolders
+        for subfolder in iga_path.iterdir():
+            if subfolder.is_dir():
+                subfolder_name = subfolder.name.replace("_", " ").replace(",", " & ").title()
+                for csv_file in subfolder.glob("*.csv"):
+                    category = f"{subfolder_name} - {csv_file.stem.replace('iga_', '').replace('_', ' ').title()}"
+                    iga_files[category] = str(csv_file)
+    
+    csv_files['IGA'] = iga_files
+    
+    # Check Woolworths folder
+    woolworths_files = {}
+    woolworths_path = Path("Woolworths")
+    if woolworths_path.exists():
+        for csv_file in woolworths_path.glob("*.csv"):
+            category = csv_file.stem.replace("woolworths_", "").replace("_", " ").title()
+            woolworths_files[category] = str(csv_file)
+    
+    csv_files['Woolworths'] = woolworths_files
+    
+    # Check Coles folder
+    coles_files = {}
+    coles_path = Path("Coles")
+    if coles_path.exists():
+        for csv_file in coles_path.glob("*.csv"):
+            category = csv_file.stem.replace("coles_", "").replace("_", " ").title()
+            coles_files[category] = str(csv_file)
+    
+    csv_files['Coles'] = coles_files
+    
+    return csv_files
+
+@st.cache_data
+def load_csv_data(file_path: str, store_name: str):
+    """Load and process individual CSV file"""
     try:
-        # Load Coles data
-        coles_df = pd.read_csv('coles_coca_cola_products.csv')
-        coles_df['store'] = 'Coles'
+        df = pd.read_csv(file_path)
+        df['store'] = store_name
         
-        # Rename columns to match other stores and handle the new structure
-        if 'name' in coles_df.columns:
-            coles_df = coles_df.rename(columns={'name': 'product_name'})
-        if 'imageURL' in coles_df.columns:
-            coles_df = coles_df.rename(columns={'imageURL': 'image_url'})
-        # NEW: rename productURL -> product_url when present
-        if 'productURL' in coles_df.columns:
-            coles_df = coles_df.rename(columns={'productURL': 'product_url'})
+        # Standardize column names based on store
+        if store_name == 'IGA':
+            if 'title' in df.columns:
+                df = df.rename(columns={'title': 'product_name'})
+            if 'productUrl' in df.columns:
+                df = df.rename(columns={'productUrl': 'product_url'})
+            if 'imageUrl' in df.columns:
+                df = df.rename(columns={'imageUrl': 'image_url'})
+                
+        elif store_name == 'Woolworths':
+            if 'title' in df.columns:
+                df = df.rename(columns={'title': 'product_name'})
+            if 'producturl' in df.columns:
+                df = df.rename(columns={'producturl': 'product_url'})
+            if 'imageurl' in df.columns:
+                df = df.rename(columns={'imageurl': 'image_url'})
+                
+        elif store_name == 'Coles':
+            if 'name' in df.columns:
+                df = df.rename(columns={'name': 'product_name'})
+            if 'productURL' in df.columns:
+                df = df.rename(columns={'productURL': 'product_url'})
+            if 'imageURL' in df.columns:
+                df = df.rename(columns={'imageURL': 'image_url'})
         
-        # Handle image URLs - replace "Image not available" with None
-        if 'image_url' in coles_df.columns:
-            coles_df['image_url'] = coles_df['image_url'].replace('Image not available', None)
-        else:
-            coles_df['image_url'] = None
+        # Ensure required columns exist
+        required_columns = ['product_name', 'price', 'store']
+        for col in required_columns:
+            if col not in df.columns:
+                if col == 'product_name':
+                    df['product_name'] = df.get('title', df.get('name', 'Unknown Product'))
+                elif col == 'price':
+                    df['price'] = 'Price not available'
+                elif col == 'store':
+                    df['store'] = store_name
         
-        coles_df['brand'] = 'Coca-Cola'
+        # Add missing columns with default values
+        if 'brand' not in df.columns:
+            df['brand'] = 'Various'
+        if 'image_url' not in df.columns:
+            df['image_url'] = None
+        if 'product_url' not in df.columns:
+            df['product_url'] = None
+        if 'category' not in df.columns:
+            df['category'] = 'General'
         
-        # Load IGA data
-        iga_df = pd.read_csv('iga_coca_cola_products.csv')
-        iga_df['store'] = 'IGA'
+        # Keep raw price data without any parsing or validation
+        # Just create a copy of the price column for compatibility
+        df['price_numeric'] = df['price']
         
-        # Rename IGA columns to standardized names
-        if 'title' in iga_df.columns:
-            iga_df = iga_df.rename(columns={'title': 'product_name'})
-        if 'productUrl' in iga_df.columns:
-            iga_df = iga_df.rename(columns={'productUrl': 'product_url'})
-        if 'imageUrl' in iga_df.columns:
-            iga_df = iga_df.rename(columns={'imageUrl': 'image_url'})
+        # Don't filter out any rows - show all data as-is
         
-        # Load Woolworths data
-        woolworths_df = pd.read_csv('woolworths_coca_cola_products.csv')
-        woolworths_df['store'] = 'Woolworths'
-        
-        # Rename Woolworths columns to standardized names
-        if 'title' in woolworths_df.columns:
-            woolworths_df = woolworths_df.rename(columns={'title': 'product_name'})
-        if 'producturl' in woolworths_df.columns:
-            woolworths_df = woolworths_df.rename(columns={'producturl': 'product_url'})
-        if 'imageurl' in woolworths_df.columns:
-            woolworths_df = woolworths_df.rename(columns={'imageurl': 'image_url'})
-        
-        # Combine all dataframes
-        all_data = []
-        
-        # Process Coles data
-        for _, row in coles_df.iterrows():
-            all_data.append({
-                'product_name': row['product_name'],
-                'brand': row['brand'],
-                'price': row['price'],
-                'store': row['store'],
-                'image_url': row['image_url'],
-                'product_url': row.get('product_url') if pd.notna(row.get('product_url')) else None
-            })
-        
-        # Process IGA data
-        for _, row in iga_df.iterrows():
-            all_data.append({
-                'product_name': row['product_name'],
-                'brand': row['brand'],
-                'price': row['price'],
-                'store': row['store'],
-                'image_url': row['image_url'],
-                'product_url': row.get('product_url') if pd.notna(row.get('product_url')) else None
-            })
-        
-        # Process Woolworths data
-        for _, row in woolworths_df.iterrows():
-            all_data.append({
-                'product_name': row['product_name'],
-                'brand': row['brand'],
-                'price': row['price'],
-                'store': row['store'],
-                'image_url': row['image_url'] if row['image_url'] != 'Unknown' else None,
-                'product_url': row.get('product_url') if pd.notna(row.get('product_url')) else None
-            })
-        
-        # Create combined dataframe
-        combined_df = pd.DataFrame(all_data)
-        
-        # Clean price data - remove $ and convert to float, handle non-numeric values
-        def clean_price(price_str):
-            if pd.isna(price_str) or price_str == 'Price not available' or price_str == '':
-                return None
-            try:
-                # Remove $ and commas, then convert to float
-                cleaned = str(price_str).replace('$', '').replace(',', '')
-                return float(cleaned)
-            except (ValueError, AttributeError):
-                return None
-        
-        combined_df['price_numeric'] = combined_df['price'].apply(clean_price)
-        
-        # Filter out rows with no valid price
-        combined_df = combined_df.dropna(subset=['price_numeric'])
-        
-        return combined_df
+        return df
         
     except Exception as e:
-        st.error(f"Error loading data: {str(e)}")
+        st.error(f"Error loading {file_path}: {str(e)}")
         return pd.DataFrame()
+
+@st.cache_data
+def load_and_process_data():
+    """Load and process all CSV files - kept for backward compatibility"""
+    # This function is kept for any existing functionality that might depend on it
+    # but it will return empty DataFrame since we're moving to category-based loading
+    return pd.DataFrame()
 
 @st.cache_data
 def load_image_from_url(url):
@@ -186,7 +196,6 @@ def load_image_from_url(url):
         img = Image.open(BytesIO(response.content))
         return img
     except Exception as e:
-        # st.warning(f"Could not load image: {str(e)}")
         return None
 
 def update_live_price(product_url, store, product_name):
@@ -205,23 +214,13 @@ def update_live_price(product_url, store, product_name):
                 
     except Exception as e:
         return None, f"❌ Error: {str(e)}"
+    except Exception as e:
+        return None, f"❌ Error: {str(e)}"
 
 def create_price_comparison_chart(df):
-    """Create price comparison chart"""
-    if df.empty:
-        return None
-        
-    avg_prices = df.groupby('store')['price_numeric'].mean().reset_index()
-    
-    fig = px.bar(avg_prices, x='store', y='price_numeric', 
-                 title='Average Coca-Cola Product Prices by Store',
-                 labels={'price_numeric': 'Average Price ($)', 'store': 'Store'},
-                 color='store',
-                 color_discrete_map={
-                     'Coles': '#E50000',
-                     'IGA': '#00A651', 
-                     'Woolworths': '#FF6B35'
-                 })
+    """Create price comparison chart - disabled for raw price data"""
+    # Since we're using raw price strings, charts are not applicable
+    return None
     
     fig.update_layout(
         template='plotly_white',
@@ -296,75 +295,125 @@ def main():
     # Header
     st.markdown("""
     <div class="main-header">
-        <h1>🥤 Coca-Cola Products Price Comparison</h1>
+        <h1>🛒 Grocery Price Comparison</h1>
         <p>Compare prices across Coles, IGA, and Woolworths</p>
     </div>
     """, unsafe_allow_html=True)
     
-    # Load data
-    with st.spinner('Loading data...'):
-        df = load_and_process_data()
+    # Discover all available CSV files
+    csv_files = discover_csv_files()
+    
+    # Sidebar for store and category selection
+    st.sidebar.header("🏪 Store & Category Selection")
+    
+    # Store selection
+    available_stores = [store for store, files in csv_files.items() if files]
+    if not available_stores:
+        st.error("No CSV files found in store folders!")
+        st.stop()
+    
+    selected_store = st.sidebar.selectbox('Select Store:', available_stores)
+    
+    # Category selection based on selected store
+    available_categories = list(csv_files[selected_store].keys())
+    if not available_categories:
+        st.warning(f"No categories found for {selected_store}")
+        st.stop()
+    
+    selected_category = st.sidebar.selectbox('Select Category:', available_categories)
+    
+    # Load data for selected store and category
+    csv_file_path = csv_files[selected_store][selected_category]
+    
+    with st.spinner(f'Loading {selected_category} products from {selected_store}...'):
+        df = load_csv_data(csv_file_path, selected_store)
     
     if df.empty:
-        st.error("No data could be loaded. Please check your CSV files.")
+        st.error(f"No data could be loaded from {csv_file_path}")
         st.stop()
+    
+    # Display current selection info
+    st.info(f"📋 Showing **{len(df)}** products from **{selected_store} - {selected_category}**")
     
     # Sidebar filters
     st.sidebar.header("🔍 Filters")
     
-    # Store filter
-    stores = ['All'] + list(df['store'].unique())
-    selected_store = st.sidebar.selectbox('Select Store:', stores)
-    
-    # Price filter
-    min_price = float(df['price_numeric'].min())
-    max_price = float(df['price_numeric'].max())
-    price_range = st.sidebar.slider(
-        'Price Range ($)', 
-        min_value=min_price, 
-        max_value=max_price, 
-        value=(min_price, max_price),
-        step=0.50
-    )
+    # Price filter disabled for raw price data
+    st.sidebar.info("Price filtering disabled - showing raw CSV prices")
+    price_range = None  # No price filtering with raw data
     
     # Search filter
     search_term = st.sidebar.text_input('Search Products:', placeholder='Enter product name...')
     
+    # Brand filter (if available)
+    if 'brand' in df.columns and not df['brand'].isna().all():
+        available_brands = ['All'] + sorted(df['brand'].dropna().unique().tolist())
+        selected_brand = st.sidebar.selectbox('Select Brand:', available_brands)
+    else:
+        selected_brand = 'All'
+    
     # Apply filters
     filtered_df = df.copy()
     
-    if selected_store != 'All':
-        filtered_df = filtered_df[filtered_df['store'] == selected_store]
+    # Skip price filter - using raw price data
     
-    filtered_df = filtered_df[
-        (filtered_df['price_numeric'] >= price_range[0]) & 
-        (filtered_df['price_numeric'] <= price_range[1])
-    ]
-    
+    # Apply search filter
     if search_term:
         filtered_df = filtered_df[
             filtered_df['product_name'].str.contains(search_term, case=False, na=False)
         ]
-
-    # Products section
+    
+    # Apply brand filter
+    if selected_brand != 'All':
+        filtered_df = filtered_df[filtered_df['brand'] == selected_brand]
+    
+    # Products section with pagination
     st.header("🛍️ Products")
     
     if not filtered_df.empty:
+        # Pagination setup
+        products_per_page = 30
+        total_products = len(filtered_df)
+        total_pages = math.ceil(total_products / products_per_page)
+        
+        # Page selection
+        col1, col2, col3 = st.columns([1, 2, 1])
+        with col2:
+            if total_pages > 1:
+                current_page = st.selectbox(
+                    f'Page (Total: {total_pages} pages, {total_products} products)',
+                    range(1, total_pages + 1),
+                    format_func=lambda x: f"Page {x} of {total_pages}"
+                )
+            else:
+                current_page = 1
+                st.write(f"Showing all {total_products} products")
+        
+        # Calculate pagination bounds
+        start_idx = (current_page - 1) * products_per_page
+        end_idx = min(start_idx + products_per_page, total_products)
+        
+        # Get products for current page
+        page_df = filtered_df.iloc[start_idx:end_idx].reset_index(drop=True)
+        
         # Sort options
-        sort_options = ['Price (Low to High)', 'Price (High to Low)', 'Product Name', 'Store']
+        sort_options = ['Price (Low to High)', 'Price (High to Low)', 'Product Name', 'Brand']
         sort_by = st.selectbox('Sort by:', sort_options)
         
         if sort_by == 'Price (Low to High)':
-            filtered_df = filtered_df.sort_values('price_numeric')
+            page_df = page_df.sort_values('price_numeric')
         elif sort_by == 'Price (High to Low)':
-            filtered_df = filtered_df.sort_values('price_numeric', ascending=False)
+            page_df = page_df.sort_values('price_numeric', ascending=False)
         elif sort_by == 'Product Name':
-            filtered_df = filtered_df.sort_values('product_name')
-        elif sort_by == 'Store':
-            filtered_df = filtered_df.sort_values('store')
+            page_df = page_df.sort_values('product_name')
+        elif sort_by == 'Brand':
+            page_df = page_df.sort_values('brand')
         
-        # Display products with images
-        for idx, product in filtered_df.iterrows():
+        # Display pagination info
+        st.caption(f"Showing products {start_idx + 1}-{end_idx} of {total_products}")
+        
+        # Display products
+        for idx, product in page_df.iterrows():
             with st.container():
                 col1, col2, col3, col4 = st.columns([1, 4, 1, 1])
                 
@@ -390,7 +439,12 @@ def main():
                         )
                     else:
                         st.subheader(product['product_name'])
-                    st.write(f"**Brand:** {product['brand']}")
+                    
+                    # Show brand and category if available
+                    if pd.notna(product.get('brand')):
+                        st.write(f"**Brand:** {product['brand']}")
+                    if pd.notna(product.get('category')):
+                        st.write(f"**Category:** {product['category']}")
                     
                     # Store badge
                     store_colors = {
@@ -406,26 +460,16 @@ def main():
                     )
                 
                 with col3:
-                    # Current price with live update status
-                    price_key = f"price_{idx}"
-                    status_key = f"status_{idx}"
-                    
-                    if price_key not in st.session_state:
-                        st.session_state[price_key] = product['price']
-                        st.session_state[status_key] = ""
-                    
-                    st.metric("Price", st.session_state[price_key])
-                    
-                    # Show update status if available
-                    if st.session_state[status_key]:
-                        st.caption(st.session_state[status_key])
+                    # Always show raw CSV price - no session state caching
+                    st.metric("Price", product['price'])
+                    st.caption("Raw CSV Price")
                 
                 with col4:
-                    # Live price update button
+                    # Live price update button - shows result temporarily
                     if product.get('product_url') and not pd.isna(product.get('product_url')):
-                        button_key = f"update_{idx}"
+                        button_key = f"update_{start_idx + idx}"
                         if st.button("🔄 Update Price", key=button_key, help=f"Get live price for {product['product_name']}"):
-                            # Update live price
+                            # Update live price and show result
                             live_price, status_message = update_live_price(
                                 product['product_url'], 
                                 product['store'], 
@@ -433,20 +477,73 @@ def main():
                             )
                             
                             if live_price is not None:
-                                st.session_state[price_key] = f"${live_price:.2f}"
-                                # Update the dataframe for charts
-                                filtered_df.loc[idx, 'price'] = f"${live_price:.2f}"
-                                filtered_df.loc[idx, 'price_numeric'] = live_price
-                            
-                            st.session_state[status_key] = status_message
-                            st.rerun()
+                                st.success(f"Live Price: ${live_price:.2f}")
+                            else:
+                                st.error(status_message)
                     else:
-                        st.caption("No URL available")
+                        # Product URL link
+                        if product.get('product_url') and not pd.isna(product.get('product_url')):
+                            st.markdown(f"[🔗 View Product]({product['product_url']})")
+                        else:
+                            st.caption("No URL available")
                 
                 st.divider()
+        
+        # Pagination navigation at bottom
+        if total_pages > 1:
+            st.markdown("---")
+            col1, col2, col3, col4, col5 = st.columns([1, 1, 2, 1, 1])
+            
+            with col1:
+                if current_page > 1:
+                    if st.button("⬅️ Previous"):
+                        st.session_state.page = current_page - 1
+                        st.rerun()
+            
+            with col3:
+                st.write(f"Page {current_page} of {total_pages}")
+            
+            with col5:
+                if current_page < total_pages:
+                    if st.button("Next ➡️"):
+                        st.session_state.page = current_page + 1
+                        st.rerun()
     
     else:
         st.warning("No products match your current filters. Please adjust your search criteria.")
+    
+    # Summary statistics
+    if not df.empty:
+        st.markdown("---")
+        st.header("📊 Category Summary")
+        
+        col1, col2, col3, col4 = st.columns(4)
+        
+        with col1:
+            st.metric("Total Products", len(df))
+        
+        with col2:
+            # Show raw price data - no calculations since prices are strings
+            st.metric("Price Format", "Raw CSV Data")
+        
+        with col3:
+            # Display sample of price range from data
+            if not df.empty:
+                sample_prices = df['price'].head(3).tolist()
+                sample_text = ", ".join([str(p) for p in sample_prices])
+                if len(sample_text) > 20:
+                    sample_text = sample_text[:20] + "..."
+                st.metric("Sample Prices", sample_text)
+            else:
+                st.metric("Sample Prices", "N/A")
+        
+        with col4:
+            # Show total unique prices
+            if not df.empty:
+                unique_prices = df['price'].nunique()
+                st.metric("Unique Prices", unique_prices)
+            else:
+                st.metric("Unique Prices", "N/A")
 
 if __name__ == "__main__":
     main()

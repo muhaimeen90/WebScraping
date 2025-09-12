@@ -102,10 +102,29 @@ async def scrape_iga_product_price(browser: Browser, product_url: str) -> Dict[s
                 continue
         
         if price_text:
-            # Extract price using regex
-            price_match = re.search(r'\$(\d+\.?\d*)', price_text)
-            if price_match:
-                result['price'] = float(price_match.group(1))
+            # Extract price using improved regex that handles commas and high prices
+            # Updated regex to handle commas and various price formats
+            price_patterns = [
+                r'\$(\d{1,3}(?:,\d{3})*\.?\d*)',  # $1,234.56 or $1,234 or $12,345.00
+                r'\$(\d+\.?\d*)',                 # $12.34 or $12
+                r'(\d{1,3}(?:,\d{3})*\.?\d*)\s*\$', # 1,234.56 $ or 1,234 $
+                r'(\d+\.?\d*)\s*\$'               # 12.34 $ or 12 $
+            ]
+            
+            price_value = None
+            for pattern in price_patterns:
+                price_match = re.search(pattern, price_text)
+                if price_match:
+                    try:
+                        # Remove commas and convert to float
+                        price_str = price_match.group(1).replace(',', '')
+                        price_value = float(price_str)
+                        break
+                    except ValueError:
+                        continue
+            
+            if price_value is not None:
+                result['price'] = price_value
                 result['status'] = 'success'
                 result['message'] = 'Price successfully scraped'
                 logger.info(f"✅ IGA price found: ${result['price']}")
@@ -754,16 +773,31 @@ async def scrape_woolworths_product_price(browser: Browser, product_url: str) ->
                 all_prices = await page.query_selector_all('span, div')
                 for element in all_prices[:20]:  # Limit search to first 20 elements
                     text = await element.text_content()
-                    if text and '$' in text and len(text) < 15:
+                    if text and '$' in text and len(text) < 25:  # Increased length for high prices
                         import re
-                        price_match = re.search(r'\$(\d+\.\d{2})', text)
-                        if price_match:
-                            price_value = float(price_match.group(1))
-                            # Target the expected price range for current sale prices
-                            if 2.00 <= price_value <= 5.00:
-                                price_text = text.strip()
-                                logger.info(f"✅ Found fallback price: {price_text}")
-                                break
+                        # Updated regex to handle commas and high prices
+                        price_patterns = [
+                            r'\$(\d{1,3}(?:,\d{3})*\.\d{2})',  # $1,234.56
+                            r'\$(\d{1,3}(?:,\d{3})*)',         # $1,234
+                            r'\$(\d+\.\d{2})',                 # $12.34
+                            r'\$(\d+)'                         # $12
+                        ]
+                        
+                        for pattern in price_patterns:
+                            price_match = re.search(pattern, text)
+                            if price_match:
+                                try:
+                                    price_str = price_match.group(1).replace(',', '')
+                                    price_value = float(price_str)
+                                    # Expanded price range for high-value items
+                                    if 2.00 <= price_value <= 99999.99:
+                                        price_text = text.strip()
+                                        logger.info(f"✅ Found fallback price: {price_text}")
+                                        break
+                                except ValueError:
+                                    continue
+                        if price_text:  # Break outer loop if price found
+                            break
             except Exception:
                 pass
         
@@ -954,38 +988,48 @@ def clean_price_text(price_text: str) -> Optional[float]:
         # Clean the text - remove extra whitespace and normalize
         cleaned = price_text.strip().replace('\n', ' ').replace('\t', ' ')
         
-        # Handle common price formats
+        # Handle common price formats including high prices and commas
         price_patterns = [
-            r'\$(\d+\.\d{2})',  # $12.34
-            r'\$(\d+)',         # $12
-            r'(\d+\.\d{2})\s*\$',  # 12.34 $
-            r'(\d+)\s*\$',         # 12 $
-            r'AUD\s*(\d+\.\d{2})',  # AUD 12.34
-            r'AUD\s*(\d+)',         # AUD 12
-            r'(\d+\.\d{2})',        # 12.34 (no currency symbol)
-            r'(\d+)',               # 12 (no currency symbol, no decimal)
+            r'\$(\d{1,3}(?:,\d{3})*\.\d{2})',   # $1,234.56 or $12,345.67
+            r'\$(\d{1,3}(?:,\d{3})*)',          # $1,234 or $12,345 (no decimal)
+            r'\$(\d+\.\d{2})',                   # $12.34
+            r'\$(\d+)',                          # $12
+            r'(\d{1,3}(?:,\d{3})*\.\d{2})\s*\$', # 1,234.56 $
+            r'(\d{1,3}(?:,\d{3})*)\s*\$',        # 1,234 $
+            r'(\d+\.\d{2})\s*\$',                # 12.34 $
+            r'(\d+)\s*\$',                       # 12 $
+            r'AUD\s*(\d{1,3}(?:,\d{3})*\.\d{2})', # AUD 1,234.56
+            r'AUD\s*(\d{1,3}(?:,\d{3})*)',       # AUD 1,234
+            r'AUD\s*(\d+\.\d{2})',               # AUD 12.34
+            r'AUD\s*(\d+)',                      # AUD 12
+            r'(\d{1,3}(?:,\d{3})*\.\d{2})',     # 1,234.56 (no currency symbol)
+            r'(\d{1,3}(?:,\d{3})*)',            # 1,234 (no currency symbol)
+            r'(\d+\.\d{2})',                     # 12.34 (no currency symbol)
+            r'(\d+)',                            # 12 (no currency symbol, no decimal)
         ]
         
         for pattern in price_patterns:
             import re
             match = re.search(pattern, cleaned)
             if match:
-                price_str = match.group(1)
+                price_str = match.group(1).replace(',', '')  # Remove commas
                 try:
                     price_value = float(price_str)
-                    # Validate reasonable price range (between $0.01 and $999.99)
-                    if 0.01 <= price_value <= 999.99:
+                    # Validate reasonable price range (between $0.01 and $99,999.99)
+                    if 0.01 <= price_value <= 99999.99:
                         return price_value
                 except ValueError:
                     continue
         
-        # Fallback: try to extract any numeric value
+        # Fallback: try to extract any numeric value with commas
         import re
-        numbers = re.findall(r'\d+\.?\d*', cleaned)
+        numbers = re.findall(r'\d{1,3}(?:,\d{3})*\.?\d*|\d+\.?\d*', cleaned)
         for num_str in numbers:
             try:
-                price_value = float(num_str)
-                if 0.01 <= price_value <= 999.99:
+                # Remove commas and convert to float
+                clean_num = num_str.replace(',', '')
+                price_value = float(clean_num)
+                if 0.01 <= price_value <= 99999.99:
                     return price_value
             except ValueError:
                 continue
